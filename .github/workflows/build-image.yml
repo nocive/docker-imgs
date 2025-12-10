@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Validate parameters
         run: test -d "${{ env.IMAGE_DIR }}" && test -f "${{ env.IMAGE_DIR }}/Makefile"
@@ -62,7 +62,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Validate parameters
         run: test -d "${{ env.IMAGE_DIR }}" && test -f "${{ env.IMAGE_DIR }}/Makefile"
@@ -110,7 +110,7 @@ jobs:
     needs: [build-push]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Export environment from JSON
         run: echo '${{ inputs.build-env-json }}' | jq -r 'to_entries|map("\(.key)=\(.value|tostring)")|.[]' >> $GITHUB_ENV
