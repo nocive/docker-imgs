@@ -116,7 +116,7 @@ jobs:
         run: echo '${{ inputs.build-env-json }}' | jq -r 'to_entries|map("\(.key)=\(.value|tostring)")|.[]' >> $GITHUB_ENV
 
       - name: Download all bake build info artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           path: .
 
