@@ -1,0 +1,11 @@
+import includes/global.conf
+
+http:// {
+	root * {$CADDY_DOCROOT:public/}
+
+	import std-imports
+
+	import handle-static
+
+	php_server
+}

@@ -1,0 +1,28 @@
+#!/usr/bin/env sh
+# shamelessly borrowed from https://github.com/martinussuherman/alpine
+
+if [ "${EDEBUG-}" = "1" ]; then
+    set -x
+fi
+
+if [ ! -z "$ECHOWNDIRS" ]; then
+    oIFS="$IFS"
+    IFS=":"
+    for dir in $ECHOWNDIRS; do
+        mkdir -p "$dir"
+        chown -R "$EUSER:$EGROUP" "$dir"
+    done
+    IFS="$oIFS"
+fi
+
+if [ ! -z "$ECHOWNFILES" ]; then
+    oIFS="$IFS"
+    IFS=":"
+    for file in $ECHOWNFILES; do
+        if [ ! -f "$file" ]; then
+            touch "$file"
+        fi
+        chown "$file"
+    done
+    IFS="$oIFS"
+fi

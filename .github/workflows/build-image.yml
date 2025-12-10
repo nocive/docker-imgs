@@ -1,0 +1,188 @@
+#
+# Requires the following secrets defined in the environment:
+#
+# DOCKER_ACCESS_TOKEN  Docker hub access token to be able to push images to the registry
+#
+name: Build image
+
+on:
+  workflow_dispatch:
+    inputs:
+      build-img:
+        description: 'Image to build (directory path under imgs/)'
+        required: true
+        type: string
+      build-env-json:
+        description: 'JSON string of environment variables'
+        required: false
+        type: string
+        default: '{}'
+
+env:
+  BUILDKIT_PROGRESS: plain
+  DOCKER_BUILDKIT: 1
+  IMAGE_DIR: imgs/${{ inputs.build-img }}
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate parameters
+        run: test -d "${{ env.IMAGE_DIR }}" && test -f "${{ env.IMAGE_DIR }}/Makefile"
+
+      - name: Export environment from JSON
+        run: echo '${{ inputs.build-env-json }}' | jq -r 'to_entries|map("\(.key)=\(.value|tostring)")|.[]' >> $GITHUB_ENV
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: nocive
+          password: ${{ secrets.DOCKER_ACCESS_TOKEN }}
+
+      - name: Run bake check
+        run: make check
+        working-directory: ${{ env.IMAGE_DIR }}
+
+  build-push:
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            arch: amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm64
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate parameters
+        run: test -d "${{ env.IMAGE_DIR }}" && test -f "${{ env.IMAGE_DIR }}/Makefile"
+
+      - name: Export environment from JSON
+        run: echo '${{ inputs.build-env-json }}' | jq -r 'to_entries|map("\(.key)=\(.value|tostring)")|.[]' >> $GITHUB_ENV
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Check if platform is supported
+        id: platform_check
+        run: |
+          if make -s ls-platforms | grep -qw '${{ matrix.platform }}'; then
+            echo "supported=true" >> $GITHUB_OUTPUT
+          else
+            echo "supported=false" >> $GITHUB_OUTPUT
+          fi
+        working-directory: ${{ env.IMAGE_DIR }}
+
+      - name: Login to Docker Hub
+        if: steps.platform_check.outputs.supported == 'true'
+        uses: docker/login-action@v3
+        with:
+          username: nocive
+          password: ${{ secrets.DOCKER_ACCESS_TOKEN }}
+
+      - name: Build and push image (${{ matrix.platform }})
+        if: steps.platform_check.outputs.supported == 'true'
+        run: |
+          make ci-${{ matrix.platform }}
+        working-directory: ${{ env.IMAGE_DIR }}
+
+      - name: Upload bake build info
+        if: steps.platform_check.outputs.supported == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bake-build-${{ matrix.arch }}
+          path: ${{ env.IMAGE_DIR }}/.bake_build_*.json
+          include-hidden-files: true
+          if-no-files-found: error
+
+  build-push-manifest:
+    runs-on: ubuntu-24.04
+    needs: [build-push]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Export environment from JSON
+        run: echo '${{ inputs.build-env-json }}' | jq -r 'to_entries|map("\(.key)=\(.value|tostring)")|.[]' >> $GITHUB_ENV
+
+      - name: Download all bake build info artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: .
+
+      - name: Move bake files to image directory
+        run: |
+          find . -type f -name '.bake_build_*.json' -print -exec mv {} ${{ env.IMAGE_DIR }}/ \;
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: nocive
+          password: ${{ secrets.DOCKER_ACCESS_TOKEN }}
+
+      - name: Build and push manifest
+        run: make ci-manifest
+        working-directory: ${{ env.IMAGE_DIR }}
+
+      - name: Install trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Scan image(s) with trivy
+        run: |
+          jq -r 'keys[]' manifest.json | xargs -trI % sh -c 'idx=$(( idx + 1 )); trivy image --quiet --exit-code 0 --table-mode summary -o trivy-report-$idx.txt %'
+          cat trivy-report-*.txt > trivy-report.full.txt
+          # truncate to 62k chars to avoid hitting github comment limit (65536)
+          head -c 62000 trivy-report.full.txt > trivy-report.txt
+          if [ "$(wc -c < trivy-report.full.txt)" != "$(wc -c < trivy-report.txt)" ]; then
+            printf "\n%s\n" "-- TRUNCATED --" >> trivy-report.txt
+          fi
+        working-directory: ${{ env.IMAGE_DIR }}
+
+      - name: Post image info to PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          PR_NUMBER="$(gh pr view --json number -q .number || true)"
+          if [ -z "$PR_NUMBER" ]; then
+            echo "Not a PR. Skipping comment."
+            exit 0
+          fi
+
+          manifest_json="$(< manifest.json)"
+          trivy_report="$(< trivy-report.txt)"
+
+          cat <<EOF > body.md
+          Image(s) successfully created:
+
+          \`\`\`json
+          $manifest_json
+          \`\`\`
+
+          ---
+
+          <details>
+          <summary>Trivy image scan report</summary>
+
+          \`\`\`
+          $trivy_report
+          \`\`\`
+          </details>
+          EOF
+
+          gh pr comment "$PR_NUMBER" --body-file body.md
+        working-directory: ${{ env.IMAGE_DIR }}

@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+# shamelessly borrowed from https://github.com/martinussuherman/alpine
+set -eu
+
+if [ "${EDEBUG-}" = "1" ]; then
+    set -x
+fi
+
+set-user-group-home
+chown-path
+
+exec su-exec "$EUSER" "$@"

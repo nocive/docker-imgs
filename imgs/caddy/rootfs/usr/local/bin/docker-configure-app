@@ -1,0 +1,7 @@
+#!/usr/bin/env sh
+set -eu
+
+log_prefix="$(basename "$0"):"
+
+echo "${log_prefix} nothing to do, not implemented..."
+echo "${log_prefix} overwrite this script if you need to configure your application!"

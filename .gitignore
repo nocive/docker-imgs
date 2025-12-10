@@ -1,0 +1,6 @@
+*.iid
+._*
+*.swp
+.bake_build*
+manifest.json
+trivy-report*.txt

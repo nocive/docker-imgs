@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+set -eu
+
+if [ "${EDEBUG-}" = "1" ]; then
+    set -x
+fi
+
+set-user-group-home
+chown-path
+
+exec setpriv --reuid="$EUSER" --regid="$EGROUP" --init-groups -- "$@"
