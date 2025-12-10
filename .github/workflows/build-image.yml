@@ -137,21 +137,6 @@ jobs:
         run: make ci-manifest
         working-directory: ${{ env.IMAGE_DIR }}
 
-      - name: Install trivy
-        run: |
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
-
-      - name: Scan image(s) with trivy
-        run: |
-          jq -r 'keys[]' manifest.json | xargs -trI % sh -c 'idx=$(( idx + 1 )); trivy image --quiet --exit-code 0 --table-mode summary -o trivy-report-$idx.txt %'
-          cat trivy-report-*.txt > trivy-report.full.txt
-          # truncate to 62k chars to avoid hitting github comment limit (65536)
-          head -c 62000 trivy-report.full.txt > trivy-report.txt
-          if [ "$(wc -c < trivy-report.full.txt)" != "$(wc -c < trivy-report.txt)" ]; then
-            printf "\n%s\n" "-- TRUNCATED --" >> trivy-report.txt
-          fi
-        working-directory: ${{ env.IMAGE_DIR }}
-
       - name: Post image info to PR
         env:
           GH_TOKEN: ${{ github.token }}
@@ -164,7 +149,6 @@ jobs:
           fi
 
           manifest_json="$(< manifest.json)"
-          trivy_report="$(< trivy-report.txt)"
 
           cat <<EOF > body.md
           Image(s) successfully created:
@@ -172,16 +156,6 @@ jobs:
           \`\`\`json
           $manifest_json
           \`\`\`
-
-          ---
-
-          <details>
-          <summary>Trivy image scan report</summary>
-
-          \`\`\`
-          $trivy_report
-          \`\`\`
-          </details>
           EOF
 
           gh pr comment "$PR_NUMBER" --body-file body.md
