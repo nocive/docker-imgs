@@ -17,9 +17,7 @@ RUN \
   xcaddy build \
       --output /usr/local/bin/frankenphp \
       --with github.com/dunglas/frankenphp=./ \
-      --with github.com/dunglas/frankenphp/caddy=./caddy/ \
-      \
-      --with github.com/caddyserver/transform-encoder
+      --with github.com/dunglas/frankenphp/caddy=./caddy/
 
 FROM runner
 ARG PECL_GRPC_VERSION
