@@ -91,7 +91,7 @@ COPY --link --from=composer:2 /usr/bin/composer /usr/bin/
 COPY --link ./rootfs /
 
 # opentelemetry: https://opentelemetry.io/docs/languages/sdk-configuration/
-ENV OTEL_EXPORTER_OTLP_ENDPOINT=http://172.25.1.1:4317
+ENV OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-exporter:4317
 ENV OTEL_EXPORTER_OTLP_PROTOCOL=grpc
 ENV OTEL_PHP_AUTOLOAD_ENABLED=true
 ENV OTEL_PHP_EXCLUDED_URLS=^/_
