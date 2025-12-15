@@ -98,7 +98,7 @@ jobs:
 
       - name: Upload bake build info
         if: steps.platform_check.outputs.supported == 'true'
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: bake-build-${{ matrix.arch }}
           path: ${{ env.IMAGE_DIR }}/.bake_build_*.json
